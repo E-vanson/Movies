@@ -30,11 +30,11 @@ async function generate_actors_report(film_path, neighborhood_path) {
         fs.createReadStream(film_path)
             .pipe(csv_parser())
             .on('data', (row) => {
-                const { Title, Year, Location, Type, Actor } = row;
+                const { id, Type, Title, Year, Location, Production_Company, Distributor, Director, Writers, Actor,Frequency  } = row;
                 if (!films[Actor]) {
                     films[Actor] = [];
                 }
-                films[Actor].push({ Title, Year, Location, Type });
+                films[Actor].push({ Title, Year, Type , Location });
             })
             .on('end', () => {
                 resolve();
@@ -62,32 +62,36 @@ async function generate_actors_report(film_path, neighborhood_path) {
     // Generate actor report
     const actorReport = [];
     for (const actor in films) {
-        const productions = films[actor];
-        if (productions.length < 2) continue; // Skip actors with fewer than two productions
+        const actorMovies = films[actor];
+        if (actorMovies.length < 1) continue; // Skip actors with no movies
 
-        actorReport.push(`Actor: ${actor.padEnd(30)}`);
-        const sortedProductions = productions.sort((a, b) => a.Title.localeCompare(b.Title));
+        actorReport.push(`Actor: ${actor}`);
+        actorMovies.forEach(movie => {
+            const { Title, Year, Type, Location} = movie;
+            const formattedYears = Array.isArray(Year) ? `${Math.min(...Year)} - ${Math.max(...Year)}` : Year;
+            let locations = '';
 
-        sortedProductions.forEach(prod => {
-            const years = prod.Year.includes('-') ? prod.Year.split('-') : [prod.Year];
-            const formattedYears = years.length > 1 ? `${Math.min(...years)} - ${Math.max(...years)}` : years[0];
-            const neighborhoodsList = neighborhoods[prod.Location] ? neighborhoods[prod.Location].split(';') : [];
-            let locationsStr;
-            if (neighborhoodsList.length <= 3) {
-                locationsStr = neighborhoodsList.join('; ');
+            if (Array.isArray(Location)) {
+                const neighborhoodList = Location.map(loc => neighborhoods[loc] || loc);
+                locations = neighborhoodList.length <= 3 ? neighborhoodList.join('; ') : `${neighborhoodList.slice(0, 2).join('; ')} and ${neighborhoodList.length - 2} more`;
             } else {
-                locationsStr = neighborhoodsList.slice(0, 2).join('; ') + `; and ${neighborhoodsList.length - 2} more`;
+                locations = neighborhoods[Location] || Location;
             }
-            actorReport.push(`${prod.Title.padEnd(35)}${prod.Type.padEnd(6)}${formattedYears.padEnd(7)}${locationsStr}`);
-        });
-    }
+           
 
+            actorReport.push(`${Title}   ${Type}   ${formattedYears}   ${locations}` );
+        });
+
+        actorReport.push(''); // Add an empty line after each actor's report
+    }
+    console.log("Actor report " + actorReport)
     return actorReport;
+    
 }
 
 // Example usage
-const film_path = 'actor_data.csv';
-const neighborhood_path = 'actor_data.csv';
+const film_path = 'film_locations_with_id.csv';
+const neighborhood_path = 'sf_neighborhoods_with_centroid.csv';
 
 // Function to display the menu and get user choice
 function displayMenu() {
@@ -111,11 +115,16 @@ async function runProgram() {
         if (choice === "1") {
             reportOne();
         } else if (choice === "2") {
-        const report = await generate_actors_report(film_path, neighborhood_path);
-        report.forEach(line => {
-            console.log(line);
-            console.log(); // Insert newline after each actor's report
-        });
+            generate_actors_report(film_path, neighborhood_path)
+            .then(report => {
+                for (let i = 0; i < report.length; i++) {
+                    console.log()
+                    console.log("MovieTitle " + " Format " + " Year " + " Location " + "\n" + report[i] + "\n"); // Each actor report
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
     }
         // Add extra credit options if needed
         else if (choice === "0") {
